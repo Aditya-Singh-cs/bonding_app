@@ -1,0 +1,46 @@
+name: bonding_app
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  google_fonts: ^6.2.1
+  flutter_riverpod: ^2.6.1
+  firebase_core: ^3.10.1
+  firebase_auth: ^5.4.1
+  cloud_firestore: ^5.6.2
+  intl: ^0.19.0
+  # AGORA & PERMISSIONS (Aage ke calling features ke liye)
+  agora_rtc_engine: ^6.4.0
+  permission_handler: ^11.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  # LOGO GENERATOR TOOL
+  flutter_launcher_icons: ^0.13.1
+
+# --- LOGO CONFIGURATION ---
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/logo.png" # Jo image tune upload ki thi uska path
+  adaptive_icon_background: "#3F51B5" # Indigo Color Theme
+  adaptive_icon_foreground: "assets/logo.png"
+  remove_alpha_ios: true
+
+flutter:
+  uses-material-design: true
+
+  # --- ASSETS REGISTRATION ---
+  assets:
+    - assets/logo.png
