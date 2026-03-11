@@ -237,7 +237,7 @@ class HomeScreen extends StatelessWidget {
               
               // Naye fields fetch ho rahi hain
               int trial = userData['trialSeconds'] ?? 0;
-              int wallet = userData['walletBalance'] ?? 0;
+              int wallet = userData['walletBalanceInPaise'] ?? 0;
               bool isTrialUsed = userData['isTrialUsed'] ?? false;
 
               return _buildBalanceCard(trial, wallet, isTrialUsed);
@@ -348,7 +348,7 @@ class HomeScreen extends StatelessWidget {
     var userData = userDoc.data() as Map<String, dynamic>;
     
     int trial = userData['trialSeconds'] ?? 0;
-    int wallet = userData['walletBalance'] ?? 0;
+    int wallet = userData['walletBalanceInPaise'] ?? 0;
     bool isTrialUsed = userData['isTrialUsed'] ?? false;
 
     // Check: Trial bacha hai (aur used nahi hua) YA wallet mein paise hain?
@@ -413,7 +413,7 @@ class HomeScreen extends StatelessWidget {
               Text(
                 showTrial 
                     ? "${trial ~/ 60} min ${trial % 60} sec" 
-                    : "₹$wallet", 
+                    : "₹${(wallet / 100).toStringAsFixed(2)}", 
                 style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)
               ),
             ],

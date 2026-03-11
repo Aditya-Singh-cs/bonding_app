@@ -33,80 +33,56 @@ class _CallScreenState extends State<CallScreen> {
     _initCallLogic();
   }
 
-  // 1. Logic: Firebase se Krishna Chahar wala data check karna
-  // void _initCallLogic() async {
-  //   final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
+  // FIXED: Logic for fetching data and calculating time
+  void _initCallLogic() async {
+    final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
     
-  //   try {
-  //     // Seedha Firestore se fetch kar rahe hain taaki koi function ka locha na rahe
-  //     var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    try {
+      var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       
-  //     if (userDoc.exists && mounted) {
-  //       var data = userDoc.data() as Map<String, dynamic>;
+      if (userDoc.exists && mounted) {
+        var data = userDoc.data() as Map<String, dynamic>;
         
-  //       // Tere fields: trialSeconds aur walletBalance
-  //       int trial = data['trialSeconds'] ?? 0;
-  //       int wallet = data['walletBalance'] ?? 0;
+        int trial = data['trialSeconds'] ?? 0;
+        int walletInPaise = data['walletBalanceInPaise'] ?? 0;
+        bool isTrialUsed = data['isTrialUsed'] ?? false;
 
-  //       setState(() {
-  //         if (trial > 0) {
-  //           // Agar trialSeconds (299) bache hain
-  //           _isTrialCall = true;
-  //           _totalSecondsAvailable = trial;
-  //         } else if (wallet > 0) {
-  //           // Agar trial 0 hai par wallet mein paise hain
-  //           _isTrialCall = false;
-  //           // Math: (Rupees / Rate) * 60
-  //           _totalSecondsAvailable = ((wallet / widget.pricePerMin) * 60).floor();
-  //         } else {
-  //           _totalSecondsAvailable = 0;
-  //         }
-  //         _isLoading = false;
-  //       });
+        // DEBUG: Terminal mein check kar ki kya value aa rahi hai
+        print("DEBUG: Trial Seconds: $trial, Wallet Paise: $walletInPaise, Used: $isTrialUsed");
 
-  //       if (_totalSecondsAvailable > 0) {
-  //         _startTimer();
-  //       } else {
-  //         _showPayDialog();
-  //       }
-  //     }
-  //   } catch (e) {
-  //     print("Error initialization: $e");
-  //     if (mounted) setState(() => _isLoading = false);
-  //   }
-  // }
-  // CallScreen ki _initCallLogic mein ye change karo:
+        setState(() {
+          // Check: Agar trial bacha hai AUR used nahi hua
+          if (trial > 0 && !isTrialUsed) {
+            _isTrialCall = true;
+            _totalSecondsAvailable = trial;
+          } 
+          // Check: Warna wallet balance check karo
+          else if (walletInPaise > 0) {
+            _isTrialCall = false;
+            // Precision Math: (Paise / (Rate * 100 / 60))
+            double paisePerSec = (widget.pricePerMin * 100) / 60;
+            _totalSecondsAvailable = (walletInPaise / paisePerSec).floor();
+          } 
+          else {
+            _isTrialCall = false;
+            _totalSecondsAvailable = 0;
+          }
+          _isLoading = false;
+        });
 
-void _initCallLogic() async {
-  final String uid = FirebaseAuth.instance.currentUser?.uid ?? "";
-  var userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-  
-  if (userDoc.exists && mounted) {
-    var data = userDoc.data() as Map<String, dynamic>;
-    int trial = data['trialSeconds'] ?? 0;
-    int wallet = data['walletBalance'] ?? 0;
-    bool isTrialUsed = data['isTrialUsed'] ?? false; // Flag check kiya
+        print("DEBUG: Total Seconds Available for this call: $_totalSecondsAvailable");
 
-    setState(() {
-      // FIX: Trial tabhi chale jab Seconds > 0 hon AUR isTrialUsed FALSE ho
-      if (trial > 0 && !isTrialUsed) {
-        _isTrialCall = true;
-        _totalSecondsAvailable = trial;
-      } else {
-        // Warna hamesha Paid Call maano
-        _isTrialCall = false;
-        _totalSecondsAvailable = ((wallet / widget.pricePerMin) * 60).floor();
+        if (_totalSecondsAvailable > 0) {
+          _startTimer();
+        } else {
+          _showPayDialog();
+        }
       }
-      _isLoading = false;
-    });
-
-    if (_totalSecondsAvailable > 0) {
-      _startTimer();
-    } else {
-      _showPayDialog();
+    } catch (e) {
+      print("Error initialization: $e");
+      if (mounted) setState(() => _isLoading = false);
     }
   }
-}
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -123,13 +99,12 @@ void _initCallLogic() async {
     });
   }
 
-  // 2. Call End: Database ko update karna
   Future<void> _endCall() async {
     _timer?.cancel();
 
     if (_secondsSpent > 0) {
-      // DatabaseService mein decreaseBalance call karega (Isme seconds spent bhej rahe hain)
-      await DatabaseService().decreaseBalance(_secondsSpent, pricePerMin:widget.pricePerMin);
+      // Named parameter use kar rahe hain: pricePerMin
+      await DatabaseService().decreaseBalance(_secondsSpent, pricePerMin: widget.pricePerMin);
 
       await DatabaseService().saveCallRecord(
         buddyName: widget.buddyName,
@@ -152,10 +127,10 @@ void _initCallLogic() async {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text("Samay Samapt!"),
+        title: const Text("Balance Exhausted"),
         content: Text(
           _isTrialCall 
-          ? "Aapka Free Trial (Minutes) khatam ho gaye hain." 
+          ? "Aapka Free Trial khatam ho gaya hai." 
           : "Aapka Wallet Balance khali ho gaya hai.",
         ),
         actions: [
@@ -164,13 +139,13 @@ void _initCallLogic() async {
               Navigator.pop(context);
               _endCall();
             },
-            child: const Text("Ok, End Call", style: TextStyle(color: Colors.red)),
+            child: const Text("End Call", style: TextStyle(color: Colors.red)),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               _endCall();
-              // TODO: Navigate to Recharge
+              // TODO: Navigate to Recharge Screen
             },
             child: const Text("Recharge Now"),
           ),
