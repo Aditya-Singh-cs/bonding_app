@@ -97,11 +97,10 @@ import 'package:flutter/material.dart';
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
-  // --- LOGOUT LOGIC ---
+  // --- LOGOUT LOGIC (INTACT) ---
   Future<void> _handleLogout(BuildContext context) async {
-    await FirebaseAuth.instance.signOut(); // Session khatam
+    await FirebaseAuth.instance.signOut(); 
     if (context.mounted) {
-      // Login screen par wapas aur saari history clear
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const LoginScreen()),
@@ -130,11 +129,20 @@ class ProfileScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Database se real name aur balance nikaalna
-          var userData = snapshot.data?.data() as Map<String, dynamic>?;
-          String name = userData?['name'] ?? "New User";
-          int totalSeconds = userData?['balanceSeconds'] ?? 0;
-          int mins = totalSeconds ~/ 60;
+          if (!snapshot.hasData || !snapshot.data!.exists) {
+            return const Center(child: Text("User data not found"));
+          }
+
+          var userData = snapshot.data!.data() as Map<String, dynamic>;
+          String name = userData['name'] ?? "New User";
+          
+          // --- STEP 1: Fetching New Fields ---
+          int trial = userData['trialSeconds'] ?? 0;
+          int walletPaise = userData['walletBalanceInPaise'] ?? 0;
+          bool isTrialUsed = userData['isTrialUsed'] ?? false;
+
+          // Master Switch: Decision Making
+          bool showTrial = trial > 0 && !isTrialUsed;
 
           return Column(
             children: [
@@ -147,7 +155,6 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 15),
-              // --- DYNAMIC NAME ---
               Text(
                 name,
                 style: const TextStyle(
@@ -157,7 +164,7 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 30),
 
-              // Wallet/Balance Card
+              // --- STEP 2: Smart Wallet Card ---
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Card(
@@ -171,13 +178,18 @@ class ProfileScreen extends StatelessWidget {
                       color: Colors.indigo,
                       size: 30,
                     ),
-                    title: const Text("Remaining Time"),
-                    subtitle: const Text("Your free trial balance"),
-                    // --- DYNAMIC BALANCE ---
+                    // Phase ke hisaab se Title badlega
+                    title: Text(showTrial ? "Free Trial Time" : "Wallet Balance"),
+                    // Phase ke hisaab se Subtitle badlega
+                    subtitle: Text(showTrial ? "Your free gift minutes" : "Available funds"),
+                    
+                    // --- DYNAMIC BALANCE (Minutes or ₹) ---
                     trailing: Text(
-                      "$mins min",
+                      showTrial 
+                        ? "${trial ~/ 60}m ${trial % 60}s" 
+                        : "₹${(walletPaise / 100).toStringAsFixed(2)}",
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.green,
                       ),
@@ -191,7 +203,6 @@ class ProfileScreen extends StatelessWidget {
                 leading: const Icon(Icons.history),
                 title: const Text("Call History"),
                 onTap: () {
-                  // Navigation add karo:
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -216,7 +227,6 @@ class ProfileScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: TextButton(
-                  // --- UPDATED LOGOUT CALL ---
                   onPressed: () => _handleLogout(context),
                   child: const Text(
                     "Logout",
