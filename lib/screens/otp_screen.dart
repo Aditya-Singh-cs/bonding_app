@@ -1,9 +1,12 @@
-import 'dart:async'; // Timer ke liye zaroori hai
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart'; // NAYA IMPORT
+import 'package:firebase_auth/firebase_auth.dart'; // NAYA IMPORT
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import '../services/database_service.dart'; // Database entry ke liye
+import '../services/database_service.dart';
 import 'home_screen.dart';
-import 'name_entry_screen.dart'; // NAYA IMPORT: Name Entry ke liye
+import 'name_entry_screen.dart';
+import 'buddy_dashboard.dart'; // NAYA IMPORT
 
 class OTPScreen extends StatefulWidget {
   final String verificationId;
@@ -21,8 +24,6 @@ class OTPScreen extends StatefulWidget {
 
 class _OTPScreenState extends State<OTPScreen> {
   final TextEditingController _otpController = TextEditingController();
-  
-  // Timer related variables
   late Timer _timer;
   int _secondsRemaining = 30;
   bool _canResend = false;
@@ -34,42 +35,41 @@ class _OTPScreenState extends State<OTPScreen> {
     _startTimer();
   }
 
-  // Timer shuru karne ka logic
   void _startTimer() {
     _canResend = false;
     _secondsRemaining = 30;
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        if (_secondsRemaining > 0) {
-          _secondsRemaining--;
-        } else {
-          _canResend = true;
-          _timer.cancel();
-        }
-      });
+      if (mounted) {
+        setState(() {
+          if (_secondsRemaining > 0) {
+            _secondsRemaining--;
+          } else {
+            _canResend = true;
+            _timer.cancel();
+          }
+        });
+      }
     });
   }
 
-  // OTP Resend karne ka logic
   void _resendOtp() {
     AuthService().sendOTP(widget.phoneNumber, (newVerId) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("OTP Resent Successfully!")),
       );
-      _startTimer(); // Timer fir se shuru
+      _startTimer();
     });
   }
 
   @override
   void dispose() {
-    _timer.cancel(); // Memory leak se bachne ke liye timer band karo
+    _timer.cancel();
     _otpController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // CHANGE: Button logic variable
     bool isOtpReady = _otpController.text.length == 6 && !_isVerifying;
 
     return Scaffold(
@@ -97,25 +97,20 @@ class _OTPScreenState extends State<OTPScreen> {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 30),
-              
-              // OTP Input
               TextField(
                 controller: _otpController,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 textAlign: TextAlign.center,
                 style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                // CHANGE: Re-build UI on every character change
                 onChanged: (val) => setState(() {}),
                 decoration: InputDecoration(
                   counterText: "",
-                  hintText: "000000", 
+                  hintText: "000000",
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
                 ),
               ),
               const SizedBox(height: 20),
-              
-              // Timer and Resend Row
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -131,13 +126,10 @@ class _OTPScreenState extends State<OTPScreen> {
                 ],
               ),
               const SizedBox(height: 30),
-              
-              // Verify Button
               SizedBox(
                 width: double.infinity,
                 height: 55,
                 child: ElevatedButton(
-                  // CHANGE: Button enabled only if isOtpReady is true
                   onPressed: isOtpReady ? () async {
                     setState(() { _isVerifying = true; });
                     try {
@@ -147,36 +139,52 @@ class _OTPScreenState extends State<OTPScreen> {
                         _otpController.text.trim(),
                       );
 
-                      // 2. Database mein user setup karo (5 min balance)
-                      await DatabaseService().setupNewUser();
+                      // --- NAYA SMART NAVIGATION LOGIC ---
+                      String phone = "+91${widget.phoneNumber.trim()}";
 
-                      // 3. SMART NAVIGATION: Check if Name is set
-                      bool nameExists = await DatabaseService().isNameSet();
+                      // 2. Sabse pehle Buddy check karo
+                      var buddyQuery = await FirebaseFirestore.instance
+                          .collection('buddies')
+                          .where('phoneNumber', isEqualTo: phone)
+                          .get();
 
                       if (mounted) {
-                        if (nameExists) {
-                          // Purana User -> Seedha Home
+                        if (buddyQuery.docs.isNotEmpty) {
+                          // BANDA BUDDY HAI!
                           Navigator.pushAndRemoveUntil(
                             context,
-                            MaterialPageRoute(builder: (context) => const HomeScreen()),
+                            MaterialPageRoute(builder: (context) => const BuddyDashboard()),
                             (route) => false,
                           );
                         } else {
-                          // Naya User -> Name Entry Page
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (context) => const NameEntryScreen()),
-                            (route) => false,
-                          );
+                          // BANDA NORMAL USER HAI
+                          await DatabaseService().setupNewUser();
+                          bool nameExists = await DatabaseService().isNameSet();
+
+                          if (nameExists) {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(builder: (context) => const HomeScreen()),
+                              (route) => false,
+                            );
+                          } else {
+                            Navigator.pushAndRemoveUntil(
+                              context,
+                              MaterialPageRoute(builder: (context) => const NameEntryScreen()),
+                              (route) => false,
+                            );
+                          }
                         }
                       }
                     } catch (e) {
-                      setState(() { _isVerifying = false; });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Invalid OTP! Please try again.")),
-                      );
+                      if (mounted) {
+                        setState(() { _isVerifying = false; });
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Invalid OTP! Please try again.")),
+                        );
+                      }
                     }
-                  } : null, // Hard disable when validation fails
+                  } : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.indigo,
                     foregroundColor: Colors.white,
